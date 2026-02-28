@@ -1,0 +1,1061 @@
+---
+import type { Entry, TldChip, RoleChip } from "../lib/portfolio-utils";
+import { TOP_TLDS_SET } from "../lib/portfolio-utils";
+import ChevronLeft from "lucide-astro/ChevronLeft";
+import Menu from "lucide-astro/Menu";
+import Shuffle from "lucide-astro/Shuffle";
+import Copy from "lucide-astro/Copy";
+import ExternalLink from "lucide-astro/ExternalLink";
+import Dices from "lucide-astro/Dices";
+
+interface Props {
+    entries: Entry[];
+    tldChips: TldChip[];
+    tldOtherCount: number;
+    roleChips: RoleChip[];
+    activeDomain?: string;
+    pageTitle: string;
+    pageHeading: string;
+    backHref?: string;
+    backLabel?: string;
+    /** Lock the TLD filter to a specific value (hides the TLD dropdown) */
+    lockedTld?: string;
+    /** Lock the role filter to a specific value (hides the role dropdown) */
+    lockedRole?: string;
+}
+
+const {
+    entries,
+    tldChips,
+    tldOtherCount,
+    roleChips,
+    activeDomain,
+    pageTitle,
+    pageHeading,
+    backHref,
+    backLabel,
+    lockedTld,
+    lockedRole,
+} = Astro.props;
+
+const activeEntry = activeDomain
+    ? entries.find((e) => e.domain === activeDomain)
+    : undefined;
+---
+
+<div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title-row">
+                {
+                    backHref ? (
+                        <a
+                            href={backHref}
+                            class="sidebar-back"
+                            title={backLabel || "Back"}
+                        >
+                            <ChevronLeft size={16} />
+                        </a>
+                    ) : null
+                }
+                <h1>{pageHeading}</h1>
+            </div>
+        </div>
+
+        <div class="sidebar-controls">
+            {/* TLD Dropdown — hidden when locked to a specific TLD */}
+            {
+                !lockedTld && (
+                    <div class="tld-dropdown-wrapper">
+                        <select id="tld-select" class="tld-select">
+                            <option value="all">
+                                All TLDs ({entries.length})
+                            </option>
+                            {tldChips.map((c) => (
+                                <option value={c.tld}>
+                                    .{c.tld} ({c.count})
+                                </option>
+                            ))}
+                            {tldOtherCount > 0 && (
+                                <option value="other">
+                                    other ({tldOtherCount})
+                                </option>
+                            )}
+                        </select>
+                    </div>
+                )
+            }
+
+            {/* Role Dropdown — hidden when locked to a specific role */}
+            {
+                !lockedRole && (
+                    <div class="tld-dropdown-wrapper">
+                        <select id="role-select" class="tld-select">
+                            <option value="all">
+                                All Roles ({entries.length})
+                            </option>
+                            {roleChips.map((c) => (
+                                <option value={c.value}>
+                                    {c.label} ({c.count})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )
+            }
+        </div>
+
+        <button
+            class="shuffle-btn-sidebar"
+            id="shuffle-btn"
+            title="Shuffle list order"
+        >
+            <Shuffle size={14} />
+            <span>Shuffle</span>
+        </button>
+
+        <ul class="site-list" id="site-list">
+            {
+                entries.map((entry) => (
+                    <li
+                        data-domain={entry.domain}
+                        data-tld={entry.tld}
+                        data-role-category={entry.roleCategory}
+                    >
+                        <div class="site-item">
+                            <button
+                                class={`site-btn${activeDomain === entry.domain ? " active" : ""}`}
+                                data-domain={entry.domain}
+                                data-name={entry.name}
+                                data-role={entry.role || ""}
+                                data-tld={entry.tld}
+                            >
+                                <span class="site-name">{entry.name}</span>
+                                <span class="site-domain">{entry.domain}</span>
+                            </button>
+                        </div>
+                    </li>
+                ))
+            }
+        </ul>
+    </aside>
+
+    <!-- Preview panel -->
+    <main class="preview" id="preview">
+        <div
+            class="empty-state"
+            id="empty-state"
+            style={activeDomain ? "display:none;" : ""}
+        >
+            <div class="empty-icon">◆</div>
+            <h2>Pick a site to preview</h2>
+            <div class="shortcut-hints">
+                <span><kbd>←</kbd><kbd>→</kbd> prev / next</span>
+                <span><kbd>R</kbd> random</span>
+                <span><kbd>C</kbd> copy</span>
+                <span><kbd>O</kbd> open</span>
+            </div>
+        </div>
+
+        <div
+            class="preview-toolbar"
+            id="preview-toolbar"
+            style={activeDomain ? "" : "display:none;"}
+        >
+            <div class="toolbar-left">
+                <button
+                    class="toolbar-btn toggle-sidebar-btn"
+                    id="toggle-sidebar"
+                    title="Toggle sidebar"
+                >
+                    <Menu size={18} />
+                </button>
+            </div>
+
+            <div class="toolbar-center">
+                <div class="toolbar-info">
+                    <span class="toolbar-name" id="toolbar-name"
+                        >{activeEntry?.name ?? ""}</span
+                    >
+                    <span class="toolbar-domain" id="toolbar-domain"
+                        >{activeEntry?.domain ?? ""}</span
+                    >
+                </div>
+            </div>
+
+            <div class="toolbar-right">
+                <button
+                    class="toolbar-btn nav-btn"
+                    id="random-btn"
+                    title="Random site (R)"
+                >
+                    <Dices size={14} />
+                    <span class="nav-label">Random</span>
+                    <kbd>R</kbd>
+                </button>
+                <button
+                    class="toolbar-btn nav-btn"
+                    id="copy-link-btn"
+                    title="Copy link (C)"
+                >
+                    <Copy size={14} />
+                    <span class="nav-label">Copy</span>
+                    <kbd>C</kbd>
+                </button>
+
+                <a
+                    class="toolbar-btn visit-btn"
+                    id="visit-btn"
+                    href={activeEntry ? `https://${activeEntry.domain}` : "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open in new tab (O)"
+                >
+                    <ExternalLink size={14} />
+                    <span>Open</span>
+                    <kbd>O</kbd>
+                </a>
+            </div>
+        </div>
+
+        <div
+            class="iframe-wrap"
+            id="iframe-wrap"
+            style={activeDomain ? "" : "display:none;"}
+        >
+            <div class="iframe-loading" id="iframe-loading">
+                <div class="spinner"></div>
+                <span>Loading preview...</span>
+            </div>
+            <iframe
+                id="preview-iframe"
+                src={activeDomain ? `https://${activeDomain}` : ""}
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            ></iframe>
+        </div>
+    </main>
+</div>
+
+{
+    /* Pass locked filters as data attributes on a hidden element for the script to read */
+}
+<div
+    id="browse-config"
+    style="display:none;"
+    data-locked-tld={lockedTld ?? ""}
+    data-locked-role={lockedRole ?? ""}
+    data-initial-domain={activeDomain ?? ""}
+>
+</div>
+
+<script>
+    // ---- Top TLDs (must match server-side list) ----
+    const TOP_TLDS = new Set([
+        "dev",
+        "io",
+        "me",
+        "com",
+        "xyz",
+        "tech",
+        "design",
+        "codes",
+        "page",
+        "app",
+        "site",
+        "vercel.app",
+        "netlify.app",
+        "github.io",
+    ]);
+
+    // ---- Read config ----
+    const configEl = document.getElementById("browse-config")!;
+    const lockedTld = configEl.dataset.lockedTld || "";
+    const lockedRole = configEl.dataset.lockedRole || "";
+    const initialDomain = configEl.dataset.initialDomain || "";
+
+    // ---- Elements ----
+    const sidebar = document.getElementById("sidebar")!;
+    const siteList = document.getElementById("site-list")!;
+    const emptyState = document.getElementById("empty-state")!;
+    const previewToolbar = document.getElementById("preview-toolbar")!;
+    const iframeWrap = document.getElementById("iframe-wrap")!;
+    const iframeLoading = document.getElementById("iframe-loading")!;
+    const previewIframe = document.getElementById(
+        "preview-iframe",
+    ) as HTMLIFrameElement;
+    const toolbarName = document.getElementById("toolbar-name")!;
+    const toolbarDomain = document.getElementById("toolbar-domain")!;
+    const visitBtn = document.getElementById("visit-btn") as HTMLAnchorElement;
+    const toggleSidebarBtn = document.getElementById("toggle-sidebar")!;
+    const tldSelect = document.getElementById(
+        "tld-select",
+    ) as HTMLSelectElement | null;
+    const roleSelect = document.getElementById(
+        "role-select",
+    ) as HTMLSelectElement | null;
+    const shuffleBtn = document.getElementById("shuffle-btn")!;
+    const randomBtn = document.getElementById("random-btn")!;
+    const copyLinkBtn = document.getElementById("copy-link-btn")!;
+
+    // ---- State ----
+    let activeDomain: string | null = initialDomain || null;
+    let currentTldFilter: string = lockedTld || "all";
+    let currentRoleFilter: string = lockedRole || "all";
+
+    // ---- Filtering ----
+    function getVisibleItems(): HTMLElement[] {
+        const items: HTMLElement[] = [];
+        siteList.querySelectorAll("li").forEach((li) => {
+            if ((li as HTMLElement).style.display !== "none") {
+                items.push(li as HTMLElement);
+            }
+        });
+        return items;
+    }
+
+    function applyFilters() {
+        const items = siteList.querySelectorAll("li");
+
+        items.forEach((li) => {
+            const el = li as HTMLElement;
+            const tld = el.dataset.tld!;
+            const roleCategory = el.dataset.roleCategory!;
+
+            // TLD filter
+            let matchesTld = false;
+            if (currentTldFilter === "all") {
+                matchesTld = true;
+            } else if (currentTldFilter === "other") {
+                matchesTld = !TOP_TLDS.has(tld);
+            } else {
+                matchesTld = tld === currentTldFilter;
+            }
+
+            // Role filter
+            let matchesRole = false;
+            if (currentRoleFilter === "all") {
+                matchesRole = true;
+            } else {
+                matchesRole = roleCategory === currentRoleFilter;
+            }
+
+            if (matchesTld && matchesRole) {
+                el.style.display = "";
+            } else {
+                el.style.display = "none";
+            }
+        });
+    }
+
+    // ---- TLD filter ----
+    if (tldSelect) {
+        tldSelect.addEventListener("change", () => {
+            currentTldFilter = tldSelect.value;
+            applyFilters();
+        });
+    }
+
+    // ---- Role filter ----
+    if (roleSelect) {
+        roleSelect.addEventListener("change", () => {
+            currentRoleFilter = roleSelect.value;
+            applyFilters();
+        });
+    }
+
+    // ---- Load a site by domain ----
+    function loadSite(domain: string, name: string) {
+        if (domain === activeDomain) return;
+        activeDomain = domain;
+
+        // Update active state in list
+        siteList
+            .querySelectorAll(".site-btn")
+            .forEach((b) => b.classList.remove("active"));
+        const targetBtn = siteList.querySelector(
+            `.site-btn[data-domain="${CSS.escape(domain)}"]`,
+        );
+        if (targetBtn) {
+            targetBtn.classList.add("active");
+            const li = targetBtn.closest("li");
+            if (li) li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+
+        // Show toolbar + iframe
+        emptyState.style.display = "none";
+        previewToolbar.style.display = "";
+        iframeWrap.style.display = "";
+        iframeLoading.style.display = "";
+
+        toolbarName.textContent = name;
+        toolbarDomain.textContent = domain;
+        visitBtn.href = `https://${domain}`;
+
+        previewIframe.onload = () => {
+            iframeLoading.style.display = "none";
+        };
+        previewIframe.src = `https://${domain}`;
+
+        // Update URL without reload
+        const newUrl = `/${encodeURIComponent(domain)}`;
+        window.history.pushState({ domain, name }, "", newUrl);
+
+        if (window.innerWidth < 768) {
+            sidebar.classList.remove("open");
+        }
+    }
+
+    // ---- Handle browser back/forward ----
+    window.addEventListener("popstate", (e) => {
+        if (e.state && e.state.domain) {
+            const { domain, name } = e.state;
+            activeDomain = domain;
+            siteList
+                .querySelectorAll(".site-btn")
+                .forEach((b) => b.classList.remove("active"));
+            const targetBtn = siteList.querySelector(
+                `.site-btn[data-domain="${CSS.escape(domain)}"]`,
+            );
+            if (targetBtn) {
+                targetBtn.classList.add("active");
+            }
+            emptyState.style.display = "none";
+            previewToolbar.style.display = "";
+            iframeWrap.style.display = "";
+            iframeLoading.style.display = "";
+            toolbarName.textContent = name;
+            toolbarDomain.textContent = domain;
+            visitBtn.href = `https://${domain}`;
+            previewIframe.onload = () => {
+                iframeLoading.style.display = "none";
+            };
+            previewIframe.src = `https://${domain}`;
+        }
+    });
+
+    // ---- Navigation helpers ----
+    function navigateRelative(direction: number) {
+        const visible = getVisibleItems();
+        if (visible.length === 0) return;
+
+        let currentIndex = -1;
+        if (activeDomain) {
+            currentIndex = visible.findIndex(
+                (li) => li.dataset.domain === activeDomain,
+            );
+        }
+
+        let nextIndex: number;
+        if (currentIndex === -1) {
+            nextIndex = direction > 0 ? 0 : visible.length - 1;
+        } else {
+            nextIndex = currentIndex + direction;
+            if (nextIndex < 0) nextIndex = visible.length - 1;
+            if (nextIndex >= visible.length) nextIndex = 0;
+        }
+
+        const li = visible[nextIndex];
+        const btn = li.querySelector(".site-btn") as HTMLElement;
+        if (btn) loadSite(btn.dataset.domain!, btn.dataset.name!);
+    }
+
+    function loadRandom() {
+        const visible = getVisibleItems();
+        if (visible.length === 0) return;
+        const candidates = visible.filter(
+            (li) => li.dataset.domain !== activeDomain,
+        );
+        const pool = candidates.length > 0 ? candidates : visible;
+        const li = pool[Math.floor(Math.random() * pool.length)];
+        const btn = li.querySelector(".site-btn") as HTMLElement;
+        if (btn) loadSite(btn.dataset.domain!, btn.dataset.name!);
+    }
+
+    function copyCurrentLink() {
+        if (!activeDomain) return;
+        navigator.clipboard.writeText(`https://${activeDomain}`);
+
+        const originalTitle = copyLinkBtn.title;
+        copyLinkBtn.title = "Copied!";
+        const svg = copyLinkBtn.querySelector("svg");
+        if (svg) {
+            svg.innerHTML = '<path d="M20 6 9 17l-5-5" />';
+        }
+        setTimeout(() => {
+            copyLinkBtn.title = originalTitle;
+            if (svg) {
+                svg.innerHTML =
+                    '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>';
+            }
+        }, 1500);
+    }
+
+    function openCurrentSite() {
+        if (!activeDomain) return;
+        window.open(`https://${activeDomain}`, "_blank", "noopener,noreferrer");
+    }
+
+    // ---- Shuffle the list DOM order ----
+    function shuffleList() {
+        const items = Array.from(siteList.querySelectorAll("li"));
+        for (let i = items.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [items[i], items[j]] = [items[j], items[i]];
+        }
+        const fragment = document.createDocumentFragment();
+        items.forEach((li) => fragment.appendChild(li));
+        siteList.appendChild(fragment);
+    }
+
+    // ---- Click a site in the list ----
+    siteList.addEventListener("click", (e) => {
+        const target = e.target as HTMLElement;
+        const siteBtn = target.closest(".site-btn") as HTMLElement | null;
+        if (!siteBtn) return;
+        loadSite(siteBtn.dataset.domain!, siteBtn.dataset.name!);
+    });
+
+    // ---- Toolbar buttons ----
+    copyLinkBtn.addEventListener("click", copyCurrentLink);
+
+    randomBtn.addEventListener("click", loadRandom);
+
+    shuffleBtn.addEventListener("click", () => {
+        shuffleList();
+        applyFilters();
+    });
+
+    // ---- Toggle sidebar ----
+    toggleSidebarBtn.addEventListener("click", () => {
+        sidebar.classList.toggle("open");
+    });
+
+    if (window.innerWidth < 768) {
+        sidebar.classList.add("open");
+    }
+
+    // Close sidebar on outside click (mobile)
+    document.addEventListener("click", (e) => {
+        if (window.innerWidth < 768 && sidebar.classList.contains("open")) {
+            if (
+                !sidebar.contains(e.target as Node) &&
+                !(e.target as HTMLElement).closest("#toggle-sidebar")
+            ) {
+                sidebar.classList.remove("open");
+            }
+        }
+    });
+
+    // ---- Keyboard shortcuts ----
+    document.addEventListener("keydown", (e) => {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+        switch (e.key) {
+            case "ArrowRight":
+            case "j":
+                e.preventDefault();
+                navigateRelative(1);
+                break;
+            case "ArrowLeft":
+            case "k":
+                e.preventDefault();
+                navigateRelative(-1);
+                break;
+            case "r":
+                e.preventDefault();
+                loadRandom();
+                break;
+            case "c":
+                e.preventDefault();
+                copyCurrentLink();
+                break;
+            case "o":
+                e.preventDefault();
+                openCurrentSite();
+                break;
+            case "Escape":
+                if (sidebar.classList.contains("open")) {
+                    sidebar.classList.remove("open");
+                }
+                break;
+        }
+    });
+
+    // ---- Init ----
+    // If initial domain was set server-side, push a history state for it
+    if (initialDomain) {
+        const initialName = toolbarName.textContent || "";
+        window.history.replaceState(
+            { domain: initialDomain, name: initialName },
+            "",
+        );
+        // Hide loading spinner once iframe loads
+        previewIframe.addEventListener("load", () => {
+            iframeLoading.style.display = "none";
+        });
+    }
+
+    applyFilters();
+</script>
+
+<style>
+    .app {
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    /* ---- Sidebar ---- */
+    .sidebar {
+        width: 340px;
+        min-width: 340px;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid rgba(226, 232, 240, 0.6);
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        z-index: 10;
+    }
+
+    .sidebar-header {
+        padding: 1.25rem 1.25rem 0.5rem;
+    }
+
+    .sidebar-title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .sidebar-back {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        color: var(--text-muted);
+        transition: all 0.15s ease;
+        flex-shrink: 0;
+    }
+
+    .sidebar-back:hover {
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    .sidebar-header h1 {
+        font-size: 1.35rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ---- Controls ---- */
+    .sidebar-controls {
+        padding: 0.75rem 1.25rem 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    /* TLD / Role Dropdown */
+    .tld-dropdown-wrapper {
+        position: relative;
+    }
+
+    .tld-select {
+        width: 100%;
+        appearance: none;
+        padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+        font-size: 0.85rem;
+        font-family: inherit;
+        color: var(--text);
+        background-color: rgba(255, 255, 255, 0.6);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        outline: none;
+        transition: all 0.2s;
+    }
+
+    .tld-select:hover {
+        border-color: var(--border-hover);
+        background-color: #ffffff;
+    }
+
+    .tld-select:focus {
+        border-color: var(--accent);
+        background-color: #ffffff;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+
+    /* ---- Shuffle button (sidebar) ---- */
+    .shuffle-btn-sidebar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: calc(100% - 2.5rem);
+        padding: 0.5rem 1rem;
+        margin: 0 1.25rem;
+        border: 1px solid rgba(15, 23, 42, 0.1);
+        border-radius: var(--radius-sm);
+        background: rgba(15, 23, 42, 0.03);
+        color: var(--text-secondary, #64748b);
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .shuffle-btn-sidebar:hover {
+        background: rgba(15, 23, 42, 0.07);
+        color: var(--text-primary, #0f172a);
+        border-color: rgba(15, 23, 42, 0.2);
+    }
+
+    /* ---- Site list ---- */
+    .site-list {
+        flex: 1;
+        overflow-y: auto;
+        list-style: none;
+        padding: 0.5rem 0.75rem 1rem;
+    }
+
+    .site-item {
+        display: flex;
+        align-items: center;
+        border-radius: var(--radius-sm);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid transparent;
+    }
+
+    .site-item:hover {
+        background: rgba(255, 255, 255, 0.8);
+        border-color: rgba(226, 232, 240, 0.8);
+        transform: translateX(2px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    }
+
+    .site-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        min-width: 0;
+        text-align: left;
+        padding: 0.75rem 0.75rem;
+        border: none;
+        background: none;
+        border-radius: var(--radius-sm);
+    }
+
+    li:has(.site-btn.active) .site-item {
+        background: #ffffff;
+        border-color: #dbeafe;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        transform: translateX(2px);
+    }
+
+    .site-name {
+        font-size: 1rem;
+        font-weight: 550;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.4;
+    }
+
+    .site-domain {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.3;
+    }
+
+    /* ---- Preview panel ---- */
+    .preview {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: transparent;
+    }
+
+    .empty-state {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.7rem;
+        color: var(--text-muted);
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 2.5rem;
+        opacity: 0.2;
+        margin-bottom: 0.25rem;
+    }
+
+    .empty-state h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .shortcut-hints {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem 1.2rem;
+        justify-content: center;
+        margin-top: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .shortcut-hints span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 5px;
+        font-size: 0.75rem;
+        font-family: inherit;
+        font-weight: 600;
+        background: #ffffff;
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        border-radius: 4px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        color: var(--text);
+    }
+
+    .toolbar-btn kbd {
+        min-width: 18px;
+        height: 18px;
+        padding: 0 4px;
+        font-size: 0.65rem;
+        font-weight: 500;
+        background: rgba(255, 255, 255, 0.8);
+        border-color: rgba(226, 232, 240, 0.6);
+        color: var(--text-muted);
+        box-shadow: none;
+        opacity: 0.7;
+        transition: opacity 0.15s ease;
+    }
+
+    .toolbar-btn:hover kbd {
+        opacity: 1;
+        color: var(--text);
+        border-color: rgba(226, 232, 240, 0.9);
+    }
+
+    /* ---- Toolbar ---- */
+    .preview-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        min-height: 60px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        flex-shrink: 0;
+    }
+
+    .toolbar-nav {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .nav-btn {
+        padding: 0.5rem 0.6rem;
+    }
+
+    .nav-label {
+        font-size: 0.85rem;
+        font-weight: 500;
+        margin-left: 0.1rem;
+    }
+
+    .toolbar-center {
+        flex: 1;
+        display: flex;
+        justify-content: flex-start;
+        min-width: 0;
+    }
+
+    .toolbar-info {
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
+        overflow: hidden;
+    }
+
+    .toolbar-name {
+        font-size: 1.1rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .toolbar-domain {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .toolbar-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        border-radius: var(--radius-sm);
+        background: rgba(255, 255, 255, 0.6);
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .toolbar-btn:hover {
+        border-color: var(--border-hover);
+        color: var(--text);
+        background: #ffffff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        transform: translateY(-1px);
+    }
+
+    .toggle-sidebar-btn {
+        display: none;
+    }
+
+    /* ---- Iframe ---- */
+    .iframe-wrap {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .iframe-loading {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        background: var(--bg);
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        z-index: 2;
+    }
+
+    .spinner {
+        width: 26px;
+        height: 26px;
+        border: 2.5px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    #preview-iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+        display: block;
+        background: #fff;
+    }
+
+    /* ---- Mobile ---- */
+    @media (max-width: 768px) {
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            transform: translateX(-100%);
+            transition: transform 0.2s ease;
+            box-shadow: 2px 0 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .toggle-sidebar-btn {
+            display: inline-flex;
+        }
+
+        .empty-state .empty-icon {
+            font-size: 2rem;
+        }
+
+        .preview-toolbar {
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .toolbar-center {
+            order: -1;
+            flex-basis: 100%;
+            justify-content: flex-start;
+        }
+
+        .toolbar-right {
+            flex-wrap: wrap;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .sidebar {
+            width: 100%;
+            min-width: 100%;
+        }
+    }
+</style>

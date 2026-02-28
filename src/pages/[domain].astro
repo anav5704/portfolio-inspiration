@@ -1,0 +1,53 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BrowseApp from "../components/BrowseApp.astro";
+import { getCollection } from "astro:content";
+import {
+    enrichEntries,
+    computeTldChips,
+    computeRoleChips,
+} from "../lib/portfolio-utils";
+
+export async function getStaticPaths() {
+    const portfolios = await getCollection("portfolios");
+    return portfolios.map((entry) => ({
+        params: { domain: entry.data.domain },
+        props: { entry },
+    }));
+}
+
+const { entry } = Astro.props;
+const { domain, name, role } = entry.data;
+
+const allPortfolios = await getCollection("portfolios");
+const entries = enrichEntries(allPortfolios);
+const { chips: tldChips, otherCount: tldOtherCount } = computeTldChips(entries);
+const roleChips = computeRoleChips(entries);
+
+const tld = domain.split(".").slice(1).join(".");
+
+const title = `Portfolio Inspiration | ${name} — ${domain}`;
+
+const description = role
+    ? `Preview ${name}'s developer portfolio at ${domain}. ${name} is a ${role}. Browse ${entries.length.toLocaleString()}+ portfolio websites filtered by .${tld} domains, roles, and more.`
+    : `Preview ${name}'s developer portfolio at ${domain}. Browse and discover ${entries.length.toLocaleString()}+ portfolio websites with live previews.`;
+---
+
+<Layout
+    title={title}
+    description={description}
+    canonicalPath={`/${domain}`}
+    ogType="profile"
+>
+    <BrowseApp
+        entries={entries}
+        tldChips={tldChips}
+        tldOtherCount={tldOtherCount}
+        roleChips={roleChips}
+        activeDomain={domain}
+        pageTitle={title}
+        pageHeading="Portfolio Inspiration"
+        backHref="/"
+        backLabel="Home"
+    />
+</Layout>

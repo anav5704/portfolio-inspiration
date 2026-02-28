@@ -1,0 +1,66 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BrowseApp from "../../components/BrowseApp.astro";
+import { getCollection } from "astro:content";
+import {
+    enrichEntries,
+    computeTldChips,
+    computeRoleChips,
+    ROLE_CATEGORIES,
+} from "../../lib/portfolio-utils";
+
+export async function getStaticPaths() {
+    const portfolios = await getCollection("portfolios");
+    const entries = enrichEntries(portfolios);
+
+    // Collect every role category that has at least one entry
+    const roleCounts = new Map<string, number>();
+    for (const e of entries) {
+        roleCounts.set(
+            e.roleCategory,
+            (roleCounts.get(e.roleCategory) || 0) + 1,
+        );
+    }
+
+    // One path per role category
+    const paths = ROLE_CATEGORIES.filter((c) => roleCounts.has(c.value)).map(
+        (c) => ({
+            params: { role: c.value },
+            props: {
+                roleValue: c.value,
+                roleLabel: c.label,
+                entries: entries.filter((e) => e.roleCategory === c.value),
+            },
+        }),
+    );
+
+    return paths;
+}
+
+const { roleValue, roleLabel, entries } = Astro.props;
+
+// Compute chips scoped to these entries
+const { chips: tldChips, otherCount: tldOtherCount } = computeTldChips(entries);
+const roleChips = computeRoleChips(entries);
+
+const title = `Portfolio Inspiration | ${roleLabel} — ${entries.length} portfolios`;
+const description = `Discover ${entries.length} developer portfolios from ${roleLabel.toLowerCase()} developers. Preview each site live in-browser, filter by TLD (.dev, .io, .me), and find inspiration for your own ${roleLabel.toLowerCase()} portfolio.`;
+---
+
+<Layout
+    title={title}
+    description={description}
+    canonicalPath={`/role/${roleValue}`}
+>
+    <BrowseApp
+        entries={entries}
+        tldChips={tldChips}
+        tldOtherCount={tldOtherCount}
+        roleChips={roleChips}
+        pageTitle={title}
+        pageHeading={`${roleLabel} (${entries.length})`}
+        backHref="/#roles"
+        backLabel="All Roles"
+        lockedRole={roleValue}
+    />
+</Layout>

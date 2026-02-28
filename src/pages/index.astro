@@ -1,0 +1,421 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getCollection } from "astro:content";
+import {
+    enrichEntries,
+    computeAllTldCounts,
+    computeRoleChips,
+    tldToSlug,
+    TOP_TLDS,
+    TOP_TLDS_SET,
+} from "../lib/portfolio-utils";
+
+const allPortfolios = await getCollection("portfolios");
+const entries = enrichEntries(allPortfolios);
+
+const allTldCounts = computeAllTldCounts(entries);
+const topTldCounts = allTldCounts.filter((t) => TOP_TLDS_SET.has(t.tld));
+const otherTldCounts = allTldCounts.filter((t) => !TOP_TLDS_SET.has(t.tld));
+const roleChips = computeRoleChips(entries);
+const totalCount = entries.length;
+const title = `Portfolio Inspiration | Browse & Preview ${totalCount.toLocaleString()}+ Portfolio Websites`;
+const description = `Discover ${totalCount.toLocaleString()} developer portfolio websites in one place. Preview sites live, filter by TLD (.dev, .io, .me, .com) or role (fullstack, frontend, backend), and find inspiration for your own portfolio.`;
+---
+
+<Layout title={title} description={description} canonicalPath="/">
+    <div class="landing">
+        <!-- Hero -->
+        <header class="hero">
+            <div class="hero-icon">◆</div>
+            <h1>Portfolio Inspiration</h1>
+            <p class="hero-sub">
+                Browse and preview <strong>{totalCount.toLocaleString()}</strong
+                > developer portfolio websites. Filter by technology, role, or domain,
+                and find inspiration for your own.
+            </p>
+            <div class="hero-actions">
+                <a href={`/${entries[0].domain}`} class="btn btn-primary"
+                    >Start browsing</a
+                >
+                <a href="#tlds" class="btn btn-secondary">Explore by TLD</a>
+                <a href="#roles" class="btn btn-secondary">Explore by Role</a>
+            </div>
+            <div class="hero-stats">
+                <div class="stat">
+                    <span class="stat-value">{totalCount.toLocaleString()}</span
+                    >
+                    <span class="stat-label">Portfolios</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">{allTldCounts.length}</span>
+                    <span class="stat-label">Top Level Domains</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value"
+                        >{
+                            roleChips.filter((r) => r.value !== "unknown")
+                                .length
+                        }</span
+                    >
+                    <span class="stat-label">Role categories</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- TLD section -->
+        <section class="section" id="tlds">
+            <h2 class="section-title">Browse by TLD</h2>
+            <p class="section-desc">
+                Each page shows portfolios hosted on that top-level domain, with
+                a live preview panel.
+            </p>
+
+            <div class="card-grid">
+                {
+                    topTldCounts.map((t) => (
+                        <a href={`/tld/${tldToSlug(t.tld)}`} class="card">
+                            <span class="card-name">.{t.tld}</span>
+                            <span class="card-count">{t.count} sites</span>
+                        </a>
+                    ))
+                }
+                <a href="/tld/other" class="card card-muted">
+                    <span class="card-name">Other TLDs</span>
+                    <span class="card-count"
+                        >{otherTldCounts.reduce((s, t) => s + t.count, 0)} sites</span
+                    >
+                </a>
+            </div>
+
+            {
+                otherTldCounts.length > 0 && (
+                    <details class="other-details">
+                        <summary>
+                            Show all {otherTldCounts.length} other TLDs
+                        </summary>
+                        <div class="chip-grid">
+                            {otherTldCounts.map((t) => (
+                                <a
+                                    href={`/tld/${tldToSlug(t.tld)}`}
+                                    class="chip"
+                                >
+                                    .{t.tld}{" "}
+                                    <span class="chip-count">{t.count}</span>
+                                </a>
+                            ))}
+                        </div>
+                    </details>
+                )
+            }
+        </section>
+
+        <!-- Role section -->
+        <section class="section" id="roles">
+            <h2 class="section-title">Browse by Role</h2>
+            <p class="section-desc">
+                Filter portfolios by the developer's specialisation or job
+                title.
+            </p>
+
+            <div class="card-grid">
+                {
+                    roleChips.map((r) => (
+                        <a href={`/role/${r.value}`} class="card">
+                            <span class="card-name">{r.label}</span>
+                            <span class="card-count">{r.count} sites</span>
+                        </a>
+                    ))
+                }
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>
+                Built with <a
+                    href="https://astro.build"
+                    target="_blank"
+                    rel="noopener noreferrer">Astro</a
+                >. Data from <a
+                    href="https://github.com/emmabostian/developer-portfolios"
+                    target="_blank"
+                    rel="noopener noreferrer">Developer Portfolios</a
+                >
+            </p>
+        </footer>
+    </div>
+</Layout>
+
+<style>
+    .landing {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 1.5rem 4rem;
+    }
+
+    /* ---- Hero ---- */
+    .hero {
+        text-align: center;
+        padding: 4rem 0 3rem;
+    }
+
+    .hero-icon {
+        font-size: 2.5rem;
+        opacity: 0.25;
+        margin-bottom: 1rem;
+    }
+
+    .hero h1 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #0f172a;
+        margin-bottom: 0.75rem;
+    }
+
+    .hero-sub {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+        max-width: 540px;
+        margin: 0 auto 2rem;
+        line-height: 1.7;
+    }
+
+    .hero-sub strong {
+        color: var(--text);
+    }
+
+    .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        justify-content: center;
+        margin-bottom: 2.5rem;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.65rem 1.4rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        border-radius: 8px;
+        text-decoration: none;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-primary {
+        background: var(--accent);
+        color: #ffffff;
+        border: 1px solid var(--accent);
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--text);
+        border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+
+    .btn-secondary:hover {
+        background: #ffffff;
+        border-color: var(--border-hover);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        transform: translateY(-1px);
+    }
+
+    .hero-stats {
+        display: flex;
+        justify-content: center;
+        gap: 3rem;
+    }
+
+    .stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .stat-label {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 500;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+        margin-top: 3rem;
+        padding-top: 2rem;
+        border-top: 1px solid rgba(226, 232, 240, 0.6);
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #0f172a;
+        margin-bottom: 0.4rem;
+    }
+
+    .section-desc {
+        font-size: 0.95rem;
+        color: var(--text-muted);
+        margin-bottom: 1.5rem;
+    }
+
+    /* ---- Card grid ---- */
+    .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        padding: 1rem 1.1rem;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        border-radius: 10px;
+        text-decoration: none;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .card:hover {
+        background: #ffffff;
+        border-color: var(--border-hover);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+        transform: translateY(-2px);
+    }
+
+    .card-name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .card-count {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .card-muted {
+        background: rgba(241, 245, 249, 0.6);
+        border-style: dashed;
+    }
+
+    /* ---- Other TLDs details ---- */
+    .other-details {
+        margin-top: 1.25rem;
+    }
+
+    .other-details summary {
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        padding: 0.5rem 0;
+        transition: color 0.15s;
+    }
+
+    .other-details summary:hover {
+        color: var(--text);
+    }
+
+    .chip-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+    }
+
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.7rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        border-radius: 999px;
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+
+    .chip:hover {
+        background: #ffffff;
+        border-color: var(--border-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    }
+
+    .chip-count {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        background: rgba(15, 23, 42, 0.06);
+        padding: 1px 5px;
+        border-radius: 999px;
+    }
+
+    /* ---- Footer ---- */
+    .footer {
+        margin-top: 4rem;
+        padding-top: 2rem;
+        border-top: 1px solid rgba(226, 232, 240, 0.6);
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .footer a {
+        color: var(--accent);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .footer a:hover {
+        color: var(--accent-hover);
+    }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 640px) {
+        .hero h1 {
+            font-size: 1.75rem;
+        }
+
+        .hero-sub {
+            font-size: 1rem;
+        }
+
+        .hero-stats {
+            gap: 1.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+        }
+
+        .card-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        }
+    }
+</style>

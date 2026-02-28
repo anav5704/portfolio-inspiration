@@ -1,0 +1,95 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BrowseApp from "../../components/BrowseApp.astro";
+import { getCollection } from "astro:content";
+import {
+    enrichEntries,
+    computeTldChips,
+    computeRoleChips,
+    tldToSlug,
+    TOP_TLDS,
+    TOP_TLDS_SET,
+} from "../../lib/portfolio-utils";
+
+export async function getStaticPaths() {
+    const portfolios = await getCollection("portfolios");
+    const entries = enrichEntries(portfolios);
+
+    // Collect every unique TLD
+    const tldSet = new Set<string>();
+    for (const e of entries) {
+        tldSet.add(e.tld);
+    }
+
+    // One path per top TLD (using slug form)
+    const paths: {
+        params: { tld: string };
+        props: { tld: string; entries: typeof entries };
+    }[] = [...TOP_TLDS]
+        .filter((t) => tldSet.has(t))
+        .map((tld) => ({
+            params: { tld: tldToSlug(tld) },
+            props: {
+                tld: tld as string,
+                entries: entries.filter((e) => e.tld === tld),
+            },
+        }));
+
+    // One path for "other" (all TLDs not in TOP_TLDS)
+    const otherEntries = entries.filter((e) => !TOP_TLDS_SET.has(e.tld));
+    if (otherEntries.length > 0) {
+        paths.push({
+            params: { tld: "other" },
+            props: { tld: "other", entries: otherEntries },
+        });
+    }
+
+    // Also generate individual pages for every non-top TLD
+    const otherTlds = [...tldSet].filter((t) => !TOP_TLDS_SET.has(t));
+    for (const tld of otherTlds) {
+        paths.push({
+            params: { tld: tldToSlug(tld) },
+            props: { tld, entries: entries.filter((e) => e.tld === tld) },
+        });
+    }
+
+    return paths;
+}
+
+const { tld, entries } = Astro.props;
+
+// Compute chips scoped to these entries
+const { chips: tldChips, otherCount: tldOtherCount } = computeTldChips(entries);
+const roleChips = computeRoleChips(entries);
+
+const isOther = tld === "other";
+const displayName = isOther ? "Other TLDs" : `.${tld}`;
+const title = isOther
+    ? `Portfolio Inspiration | Other TLDs — ${entries.length} portfolios`
+    : `Portfolio Inspiration | .${tld} — ${entries.length} portfolios`;
+const description = isOther
+    ? `Discover ${entries.length} developer portfolios hosted on less common TLDs. Preview each site live, filter by role, and find design inspiration for your own portfolio.`
+    : `Browse ${entries.length} developer portfolios on .${tld} domains. Preview each portfolio live in-browser, filter by developer role, and get inspiration for your own .${tld} website.`;
+
+// For the "other" page we keep the TLD dropdown visible (no lock).
+// For individual TLD pages we lock the TLD filter (hide the dropdown).
+const lockedTld = isOther ? undefined : tld;
+---
+
+<Layout
+    title={title}
+    description={description}
+    canonicalPath={`/tld/${tldToSlug(tld)}`}
+>
+    <BrowseApp
+        entries={entries}
+        tldChips={tldChips}
+        tldOtherCount={tldOtherCount}
+        roleChips={roleChips}
+        pageTitle={title}
+        pageHeading={`${displayName} (${entries.length})`}
+        backHref="/#tlds"
+        backLabel="All TLDs"
+        lockedTld={lockedTld}
+    />
+</Layout>

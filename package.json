@@ -1,0 +1,16 @@
+{
+  "name": "portfolio-inspiration",
+  "version": "0.3.0",
+  "description": "Browse and preview 1,500+ developer portfolio websites for inspiration",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.0",
+    "astro": "^5.7.0",
+    "lucide-astro": "^0.556.0"
+  }
+}
