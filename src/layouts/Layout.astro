@@ -3,6 +3,7 @@ interface Props {
     title: string;
     description?: string;
     canonicalPath?: string;
+    preconnectOrigin?: string;
     ogType?: string;
 }
 
@@ -13,6 +14,7 @@ const {
     title,
     description = "Browse and preview 1,500+ developer portfolio websites. Filter by TLD, role, or technology and find portfolio inspiration for your next project.",
     canonicalPath,
+    preconnectOrigin,
     ogType = "website",
 } = Astro.props;
 
@@ -31,6 +33,18 @@ const canonicalURL = canonicalPath
         <title>{title}</title>
         <meta name="description" content={description} />
         <link rel="canonical" href={canonicalURL} />
+        {
+            preconnectOrigin && (
+                <>
+                    <link rel="dns-prefetch" href={preconnectOrigin} />
+                    <link
+                        rel="preconnect"
+                        href={preconnectOrigin}
+                        crossorigin="anonymous"
+                    />
+                </>
+            )
+        }
         <meta name="robots" content="index, follow" />
 
         <!-- Open Graph -->

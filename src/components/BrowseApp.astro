@@ -6,6 +6,7 @@ import Menu from "lucide-astro/Menu";
 import Shuffle from "lucide-astro/Shuffle";
 import Copy from "lucide-astro/Copy";
 import ExternalLink from "lucide-astro/ExternalLink";
+import Clock from "lucide-astro/Clock";
 import Dices from "lucide-astro/Dices";
 
 interface Props {
@@ -226,12 +227,38 @@ const activeEntry = activeDomain
         >
             <div class="iframe-loading" id="iframe-loading">
                 <div class="spinner"></div>
-                <span>Loading preview...</span>
+                <span class="loading-text">Loading preview…</span>
+            </div>
+            <div class="iframe-slow" id="iframe-slow" style="display:none;">
+                <div class="slow-icon"><Clock size={24} /></div>
+                <span class="slow-title">Taking a while…</span>
+                <span class="slow-hint"
+                    >The site may be slow or blocking previews.</span
+                >
+                <div class="slow-actions">
+                    <button class="slow-btn" id="iframe-retry-btn">Retry</button
+                    >
+                    <a
+                        class="slow-btn slow-btn-primary"
+                        id="iframe-open-btn"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer">Open directly</a
+                    >
+                </div>
             </div>
             <iframe
                 id="preview-iframe"
                 src={activeDomain ? `https://${activeDomain}` : ""}
                 sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                loading="eager"
+                fetchpriority="high"></iframe>
+            <iframe
+                id="prefetch-iframe"
+                aria-hidden="true"
+                tabindex="-1"
+                sandbox="allow-scripts allow-same-origin"
+                style="position:absolute;width:0;height:0;border:none;opacity:0;pointer-events:none;"
             ></iframe>
         </div>
     </main>
@@ -281,6 +308,11 @@ const activeEntry = activeDomain
     const previewToolbar = document.getElementById("preview-toolbar")!;
     const iframeWrap = document.getElementById("iframe-wrap")!;
     const iframeLoading = document.getElementById("iframe-loading")!;
+    const iframeSlow = document.getElementById("iframe-slow")!;
+    const iframeRetryBtn = document.getElementById("iframe-retry-btn")!;
+    const iframeOpenBtn = document.getElementById(
+        "iframe-open-btn",
+    ) as HTMLAnchorElement;
     const previewIframe = document.getElementById(
         "preview-iframe",
     ) as HTMLIFrameElement;
@@ -302,6 +334,143 @@ const activeEntry = activeDomain
     let activeDomain: string | null = initialDomain || null;
     let currentTldFilter: string = lockedTld || "all";
     let currentRoleFilter: string = lockedRole || "all";
+    let iframeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const IFRAME_TIMEOUT_MS = 10_000;
+
+    // ---- Prefetch system ----
+    const prefetchIframe = document.getElementById(
+        "prefetch-iframe",
+    ) as HTMLIFrameElement;
+    let prefetchedDomain: string | null = null;
+    let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+    const dnsPrefetched = new Set<string>();
+
+    /** Inject a <link rel="dns-prefetch"> + <link rel="preconnect"> for a domain (once) */
+    function dnsPrefetch(domain: string) {
+        const origin = `https://${domain}`;
+        if (dnsPrefetched.has(origin)) return;
+        dnsPrefetched.add(origin);
+
+        const dns = document.createElement("link");
+        dns.rel = "dns-prefetch";
+        dns.href = origin;
+        document.head.appendChild(dns);
+
+        const pc = document.createElement("link");
+        pc.rel = "preconnect";
+        pc.href = origin;
+        pc.crossOrigin = "anonymous";
+        document.head.appendChild(pc);
+    }
+
+    /** Start loading a domain in the hidden prefetch iframe */
+    function prefetchSite(domain: string) {
+        if (domain === prefetchedDomain || domain === activeDomain) return;
+        prefetchedDomain = domain;
+        prefetchIframe.src = `https://${domain}`;
+    }
+
+    /** Cancel any pending hover-prefetch */
+    function cancelHoverPrefetch() {
+        if (hoverTimer) {
+            clearTimeout(hoverTimer);
+            hoverTimer = null;
+        }
+    }
+
+    /** After the main iframe loads, speculatively prefetch the next item in the visible list */
+    function prefetchNeighbor() {
+        if (!activeDomain) return;
+        const visible = getVisibleItems();
+        if (visible.length < 2) return;
+        const idx = visible.findIndex(
+            (li) => li.dataset.domain === activeDomain,
+        );
+        if (idx === -1) return;
+        const nextIdx = (idx + 1) % visible.length;
+        const nextDomain = visible[nextIdx].dataset.domain;
+        if (nextDomain && nextDomain !== activeDomain) {
+            dnsPrefetch(nextDomain);
+            prefetchSite(nextDomain);
+        }
+    }
+
+    // Hover: DNS-prefetch immediately, start hidden iframe preload after 200ms
+    siteList.addEventListener(
+        "pointerenter",
+        (e) => {
+            const btn = (e.target as HTMLElement).closest(
+                ".site-btn",
+            ) as HTMLElement | null;
+            if (!btn) return;
+            const domain = btn.dataset.domain;
+            if (!domain || domain === activeDomain) return;
+
+            dnsPrefetch(domain);
+
+            cancelHoverPrefetch();
+            hoverTimer = setTimeout(() => {
+                prefetchSite(domain);
+            }, 200);
+        },
+        true,
+    );
+
+    siteList.addEventListener(
+        "pointerleave",
+        (e) => {
+            const btn = (e.target as HTMLElement).closest(
+                ".site-btn",
+            ) as HTMLElement | null;
+            if (btn) cancelHoverPrefetch();
+        },
+        true,
+    );
+
+    function clearIframeTimeout() {
+        if (iframeTimeout) {
+            clearTimeout(iframeTimeout);
+            iframeTimeout = null;
+        }
+    }
+
+    function showIframeLoading() {
+        iframeLoading.style.display = "";
+        iframeSlow.style.display = "none";
+    }
+
+    function hideIframeLoading() {
+        clearIframeTimeout();
+        iframeLoading.style.display = "none";
+        iframeSlow.style.display = "none";
+    }
+
+    function showSlowState() {
+        iframeLoading.style.display = "none";
+        iframeSlow.style.display = "";
+        if (activeDomain) {
+            iframeOpenBtn.href = `https://${activeDomain}`;
+        }
+    }
+
+    function startIframeTimeout() {
+        clearIframeTimeout();
+        iframeTimeout = setTimeout(showSlowState, IFRAME_TIMEOUT_MS);
+    }
+
+    function retryIframe() {
+        if (!activeDomain) return;
+        showIframeLoading();
+        startIframeTimeout();
+        // Force reload by blanking then re-assigning src
+        previewIframe.src = "about:blank";
+        requestAnimationFrame(() => {
+            previewIframe.src = `https://${activeDomain}`;
+        });
+    }
+
+    iframeRetryBtn.addEventListener("click", retryIframe);
 
     // ---- Filtering ----
     function getVisibleItems(): HTMLElement[] {
@@ -386,15 +555,31 @@ const activeEntry = activeDomain
         emptyState.style.display = "none";
         previewToolbar.style.display = "";
         iframeWrap.style.display = "";
-        iframeLoading.style.display = "";
+        showIframeLoading();
+        startIframeTimeout();
 
         toolbarName.textContent = name;
         toolbarDomain.textContent = domain;
         visitBtn.href = `https://${domain}`;
 
         previewIframe.onload = () => {
-            iframeLoading.style.display = "none";
+            hideIframeLoading();
+            prefetchNeighbor();
         };
+        previewIframe.onerror = () => {
+            showSlowState();
+        };
+
+        // If this domain was already prefetched, swap the iframes for an instant load
+        if (
+            prefetchedDomain === domain &&
+            prefetchIframe.src === `https://${domain}`
+        ) {
+            // Swap: move prefetch iframe content into main by swapping src
+            // The browser already has the resources cached from the prefetch iframe
+            prefetchIframe.src = "about:blank";
+            prefetchedDomain = null;
+        }
         previewIframe.src = `https://${domain}`;
 
         // Update URL without reload
@@ -423,12 +608,17 @@ const activeEntry = activeDomain
             emptyState.style.display = "none";
             previewToolbar.style.display = "";
             iframeWrap.style.display = "";
-            iframeLoading.style.display = "";
+            showIframeLoading();
+            startIframeTimeout();
             toolbarName.textContent = name;
             toolbarDomain.textContent = domain;
             visitBtn.href = `https://${domain}`;
             previewIframe.onload = () => {
-                iframeLoading.style.display = "none";
+                hideIframeLoading();
+                prefetchNeighbor();
+            };
+            previewIframe.onerror = () => {
+                showSlowState();
             };
             previewIframe.src = `https://${domain}`;
         }
@@ -591,9 +781,12 @@ const activeEntry = activeDomain
             { domain: initialDomain, name: initialName },
             "",
         );
-        // Hide loading spinner once iframe loads
+        dnsPrefetch(initialDomain);
+        // Hide loading spinner once iframe loads (or show slow state on timeout)
+        startIframeTimeout();
         previewIframe.addEventListener("load", () => {
-            iframeLoading.style.display = "none";
+            hideIframeLoading();
+            prefetchNeighbor();
         });
     }
 
@@ -1003,6 +1196,79 @@ const activeEntry = activeDomain
         to {
             transform: rotate(360deg);
         }
+    }
+
+    /* ---- Slow / error state ---- */
+    .iframe-slow {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        background: var(--bg);
+        z-index: 3;
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .slow-icon {
+        font-size: 2rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .slow-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .slow-hint {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        max-width: 320px;
+        line-height: 1.5;
+    }
+
+    .slow-actions {
+        display: flex;
+        gap: 0.6rem;
+        margin-top: 0.75rem;
+    }
+
+    .slow-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.5rem 1.1rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        color: var(--text);
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+
+    .slow-btn:hover {
+        border-color: var(--border-hover);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        transform: translateY(-1px);
+    }
+
+    .slow-btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+    }
+
+    .slow-btn-primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
     }
 
     #preview-iframe {
